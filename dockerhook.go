@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 	"flag"
+	"strings"
+	"fmt"
 	"path/filepath"
 	"os/exec"
 	"syscall"
@@ -17,6 +19,12 @@ import (
 var debug = flag.Bool("d", false, "debug mode displays handler output")
 var env = flag.Bool("e", false, "pass environment to handler")
 var shell = flag.Bool("s", false, "run handler via SHELL")
+
+var skipInspect = map[string]bool {
+    "destroy": true,
+    "untag": true,
+    "delete": true,
+}
 
 func init() {
 	flag.Usage = func() {
@@ -52,25 +60,26 @@ func exitStatus(err error) (int, error) {
 	return 0, nil
 }
 
-func inspect(docker *dockerapi.Client, id string) bytes.Buffer {
+func inspect(docker *dockerapi.Client, id string) *bytes.Buffer {
 	var b bytes.Buffer
 	container, err := docker.InspectContainer(id)
 	if err != nil {
 		log.Println("warn: unable to inspect container:", id[:12], err)
-		return b
+		return &b
 	}
-	data, err := json.Marshal(m)
+	data, err := json.Marshal(container)
 	if err != nil {
 		log.Println("warn: unable to marshal container data:", id[:12], err)
-		return b
+		return &b
 	}
 	b.Write(data)
-	return b
+	return &b
 }
 
-func trigger(hook []string, event, id string, data bytes.Buffer) {
+func trigger(hook []string, event, id string, docker *dockerapi.Client) {
+	log.Println("info: trigger:", id[:12], event)
 	hook = append(hook, event, id)
-	var cmd exec.Cmd
+	var cmd *exec.Cmd
 	if *shell {
 		cmd = exec.Command(os.Getenv("SHELL"), "-c", strings.Join(hook, " "))
 	} else {	
@@ -79,7 +88,9 @@ func trigger(hook []string, event, id string, data bytes.Buffer) {
 	if !*env {
 		cmd.Env = []string{}	
 	}
-	cmd.Stdin = data
+	if !skipInspect[event] {
+		cmd.Stdin = inspect(docker, id)
+	}
 	if *debug {
 		cmd.Stdout = os.Stdout // TODO: wrap in log output
 	}
@@ -92,12 +103,12 @@ func trigger(hook []string, event, id string, data bytes.Buffer) {
 
 func main() {
 	flag.Parse()
-	if flag.NArg() < 2 {
+	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(64)
 	}
 
-	hook, err := shlex.Split(flag.Arg(1))
+	hook, err := shlex.Split(flag.Arg(0))
 	if err != nil {
 		log.Fatalln("fatal: unable to parse handler command:", err)
 	}
@@ -106,21 +117,23 @@ func main() {
 		log.Fatalln("fatal: invalid handler executable path:", err)
 	}
 
-	docker, err := dockerapi.NewClient(getopt("DOCKER_HOST", "unix:///var/run/docker.sock"))
+	if os.Getenv("DOCKER_HOST") == "" {
+		assert(os.Setenv("DOCKET_HOST", "unix:///var/run/docker.sock"))
+	}
+	docker, err := dockerapi.NewClientFromEnv()
 	assert(err)
 
 	containers, err := docker.ListContainers(dockerapi.ListContainersOptions{})
 	assert(err)
 	for _, listing := range containers {
-		trigger(hook, "exists", listing.ID, inspect(docker, listing.ID))
+		trigger(hook, "exists", listing.ID, docker)
 	}
 
 	events := make(chan *dockerapi.APIEvents)
 	assert(docker.AddEventListener(events))
 	log.Println("info: listening for Docker events...")
 	for msg := range events {
-		log.Println("info: event:", msg.Status, msg.ID[:12])
-		go trigger(hook, msg.Status, msg.ID, inspect(docker, msg.ID))
+		go trigger(hook, msg.Status, msg.ID, docker)
 	}
 
 	log.Fatal("fatal: docker event loop closed") // todo: reconnect?
