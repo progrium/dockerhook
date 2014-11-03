@@ -35,7 +35,7 @@ func init() {
 
 func assert(err error) {
 	if err != nil {
-		log.Fatal("fatal:", err)
+		log.Fatal("fatal: ", err)
 	}
 }
 
@@ -118,7 +118,7 @@ func main() {
 	}
 
 	if os.Getenv("DOCKER_HOST") == "" {
-		assert(os.Setenv("DOCKET_HOST", "unix:///var/run/docker.sock"))
+		assert(os.Setenv("DOCKER_HOST", "unix:///var/run/docker.sock"))
 	}
 	docker, err := dockerapi.NewClientFromEnv()
 	assert(err)
