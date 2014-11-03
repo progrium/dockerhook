@@ -17,7 +17,6 @@ import (
 )
 
 var debug = flag.Bool("d", false, "debug mode displays handler output")
-var env = flag.Bool("e", false, "pass environment to handler")
 var shell = flag.Bool("s", false, "run handler via SHELL")
 
 var skipInspect = map[string]bool {
@@ -80,13 +79,10 @@ func trigger(hook []string, event, id string, docker *dockerapi.Client) {
 	log.Println("info: trigger:", id[:12], event)
 	hook = append(hook, event, id)
 	var cmd *exec.Cmd
-	if *shell {
+	if *shell && os.Getenv("SHELL") != "" {
 		cmd = exec.Command(os.Getenv("SHELL"), "-c", strings.Join(hook, " "))
 	} else {	
 		cmd = exec.Command(hook[0], hook[1:]...)
-	}
-	if !*env {
-		cmd.Env = []string{}	
 	}
 	if !skipInspect[event] {
 		cmd.Stdin = inspect(docker, id)
