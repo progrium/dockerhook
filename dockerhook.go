@@ -1,16 +1,16 @@
 package main
 
 import (
-	"log"
-	"os"
-	"flag"
-	"strings"
-	"fmt"
-	"path/filepath"
-	"os/exec"
-	"syscall"
 	"bytes"
 	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/flynn/go-shlex"
 	dockerapi "github.com/fsouza/go-dockerclient"
@@ -19,10 +19,10 @@ import (
 var debug = flag.Bool("d", false, "debug mode displays handler output")
 var shell = flag.Bool("s", false, "run handler via SHELL")
 
-var skipInspect = map[string]bool {
-    "destroy": true,
-    "untag": true,
-    "delete": true,
+var skipInspect = map[string]bool{
+	"destroy": true,
+	"untag":   true,
+	"delete":  true,
 }
 
 func init() {
@@ -81,7 +81,7 @@ func trigger(hook []string, event, id string, docker *dockerapi.Client) {
 	var cmd *exec.Cmd
 	if *shell && os.Getenv("SHELL") != "" {
 		cmd = exec.Command(os.Getenv("SHELL"), "-c", strings.Join(hook, " "))
-	} else {	
+	} else {
 		cmd = exec.Command(hook[0], hook[1:]...)
 	}
 	if !skipInspect[event] {
