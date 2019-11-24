@@ -18,6 +18,9 @@ import (
 
 var debug = flag.Bool("d", false, "debug mode displays handler output")
 var shell = flag.Bool("s", false, "run handler via SHELL")
+var printVerrion = flag.Bool("v", false, "print version and exit")
+
+var Version string
 
 var skipInspect = map[string]bool{
 	"destroy": true,
@@ -99,6 +102,11 @@ func trigger(hook []string, event, id string, docker *dockerapi.Client) {
 
 func main() {
 	flag.Parse()
+	if *printVerrion {
+		fmt.Println("version:", Version)
+		os.Exit(0)
+	}
+
 	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(64)
