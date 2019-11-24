@@ -128,8 +128,14 @@ func main() {
 	events := make(chan *dockerapi.APIEvents)
 	assert(docker.AddEventListener(events))
 	log.Println("info: listening for Docker events...")
+	filter := "container"
+	if os.Getenv("DOCKER_EVENT_FILTER") != "" {
+		filter = os.Getenv("DOCKER_EVENT_FILTER")
+	}
 	for msg := range events {
-		go trigger(hook, msg.Status, msg.ID, docker)
+		if msg.Type == filter || filter == "all" {
+			go trigger(hook, msg.Status, msg.ID, docker)
+		}
 	}
 
 	log.Fatal("fatal: docker event loop closed") // todo: reconnect?
