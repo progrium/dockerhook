@@ -1,16 +1,16 @@
 package main
 
 import (
-	"log"
-	"os"
-	"flag"
-	"strings"
-	"fmt"
-	"path/filepath"
-	"os/exec"
-	"syscall"
 	"bytes"
 	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/flynn/go-shlex"
 	dockerapi "github.com/fsouza/go-dockerclient"
@@ -18,11 +18,14 @@ import (
 
 var debug = flag.Bool("d", false, "debug mode displays handler output")
 var shell = flag.Bool("s", false, "run handler via SHELL")
+var printVerrion = flag.Bool("v", false, "print version and exit")
 
-var skipInspect = map[string]bool {
-    "destroy": true,
-    "untag": true,
-    "delete": true,
+var Version string
+
+var skipInspect = map[string]bool{
+	"destroy": true,
+	"untag":   true,
+	"delete":  true,
 }
 
 func init() {
@@ -81,7 +84,7 @@ func trigger(hook []string, event, id string, docker *dockerapi.Client) {
 	var cmd *exec.Cmd
 	if *shell && os.Getenv("SHELL") != "" {
 		cmd = exec.Command(os.Getenv("SHELL"), "-c", strings.Join(hook, " "))
-	} else {	
+	} else {
 		cmd = exec.Command(hook[0], hook[1:]...)
 	}
 	if !skipInspect[event] {
@@ -99,6 +102,11 @@ func trigger(hook []string, event, id string, docker *dockerapi.Client) {
 
 func main() {
 	flag.Parse()
+	if *printVerrion {
+		fmt.Println("version:", Version)
+		os.Exit(0)
+	}
+
 	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(64)
@@ -128,8 +136,14 @@ func main() {
 	events := make(chan *dockerapi.APIEvents)
 	assert(docker.AddEventListener(events))
 	log.Println("info: listening for Docker events...")
+	filter := "container"
+	if os.Getenv("DOCKER_EVENT_FILTER") != "" {
+		filter = os.Getenv("DOCKER_EVENT_FILTER")
+	}
 	for msg := range events {
-		go trigger(hook, msg.Status, msg.ID, docker)
+		if msg.Type == filter || filter == "all" {
+			go trigger(hook, msg.Status, msg.ID, docker)
+		}
 	}
 
 	log.Fatal("fatal: docker event loop closed") // todo: reconnect?
